@@ -1,0 +1,239 @@
+#!/bin/ksh
+#
+# 	@(#)Copyright Apple Computer 1987-93
+# 	Version 1.11 of ao on 93/01/21 12:55:37
+#
+#	Modified from /etc/startup.d/ae6, Richard Halkyard, July 2024
+#
+#	This startup.d script initializes an SEthernet network interface.
+#
+
+#
+# This script should be run by ksh.  Error checking will not work appropriately
+# if run by sh
+#
+
+PATH=/bin:/usr/bin:/etc:/usr/etc:/usr/lib
+NETADDRS=/etc/NETADDRS
+HOSTS=/etc/hosts
+InstFlag=0
+
+NAME=`basename $0`
+
+#
+# ask - keep asking a yes/no question till user answers y/n
+#
+ask() {
+  unset reply
+  while :; do
+    echo "$1 [y/n\c"
+    case $# in
+    1) echo ', no default] \c'
+       ;;
+    2) default=$2
+       echo ", default=$2] \c"
+       ;;
+    esac
+    echo '>>> \c'
+    read answer
+    case $answer in
+     [yY]|[yY][eE][sS]) reply=y; break ;;
+     [nN]|[nN][oO]) reply=n; break ;;
+        "") if [ -n "$default" ]; then
+	      reply=$default; break
+	    else
+	      echo '\nNo default response; you must answer y or n.'
+	    fi
+	    ;;
+	 *) echo "\nCan't understand >$answer<.  You must answer y or n."
+            ;;
+    esac
+  done
+}
+
+#
+#	Parse the script arguments
+#
+while [ $# != 0 ]; do
+  case $1 in
+    -i)
+      InstFlag=1
+      shift
+      ;;
+    -C)
+      maxdev=$2		# max number of devices (boards)
+      shift 2
+      ;;
+    -D)
+      shift 2
+      ;;
+    -S)
+      slot=$2
+      shift 2
+      ;;
+     *)
+      echo "$NAME:  unexpected argument:  $1"
+      exit 1
+      ;;
+  esac
+done
+
+# At this point, the original ae6 script used /etc/etheradder to validate that
+# the card was present, by looking for a MAC address resource in the declaration
+# ROM. SEthernet's MAC address is burned into the ethernet controller instead,
+# so this check would always fail. It does not seem to be necessary, though, as
+# this script only gets called if autoconfig detects a card.
+
+if [ -f /etc/HOSTNAME ]; then
+  read host domain < /etc/HOSTNAME
+else
+  host=`/bin/hostname`
+fi
+
+echo " $maxdev $NAME SEthernet/30 card(s) installed"
+
+# go through NETADDRS data base, filling in info for new cards
+# allow for possibility (though undesirable) of line containing only
+# unit number
+unit=0
+while [ "$unit" -lt "$maxdev" ]; do
+  if [ ! -f $NETADDRS ]; then
+    n=0
+  else
+    set ''`/bin/sed -n "/^[ 	]*$NAME$unit/p" $NETADDRS`
+    n=$#
+    inetaddr=$2; broadcast=$3; netmask=$4
+  fi
+
+  if [ "$n" -ge 2 ]; then
+    echo "$NAME$unit: IP address $inetaddr"
+    if [ "$netmask" = '' ]; then
+      echo "     netmask [none]"
+    else
+      echo "     netmask $netmask"
+    fi
+    echo "     broadcast address $broadcast"
+    if [ $InstFlag = 0 ]; then
+      if [ -n "$netmask" ]; then
+        /etc/ifconfig $NAME$unit "$inetaddr" netmask "$netmask" -trailers
+      else
+        /etc/ifconfig $NAME$unit "$inetaddr" -trailers
+      fi
+      /etc/ifconfig $NAME$unit
+    fi
+
+    unit=`expr $unit + 1`
+    continue
+  fi
+
+  if [ $InstFlag = 1 ] ; then
+    echo "$NAME${unit}: \c"
+    ask 'Would you like to configure this interface for IP?' y
+    if [ $reply = 'y' ] ; then
+      sh /etc/sethost
+      while : ; do
+
+        while [ "$inetaddr" = "" ]; do
+	  echo "$NAME$unit: Please enter an Internet address: \c"
+	  read inetaddr
+	  x=`expr "$inetaddr" : "\(....\).*" | tr xf XF`
+	  if [ "$x" = '127.' ] || [ "$x" = '0X7F' ]; then
+	      echo "$inetaddr"
+	      echo '^\nClass A address 127 (0x7f) is reserved for the \c'
+	      echo 'loopback driver.'
+	      inetaddr=''
+	      continue
+	  fi
+	  if [ "$inetaddr" != '' ]; then
+	    chkaddr $inetaddr |
+	      if read d x ; then
+	        :
+	      else
+	        inetaddr=''
+	      fi
+	  fi
+        done
+
+        if [ "$n" -lt 2 ]; then
+	  # first time for this card; ask for netmask
+	  while [ "$netmask" = "" ]; do
+	    echo "$NAME$unit: Please enter a netmask [none]: \c"
+	    read netmask
+	    case "$netmask" in
+	    "none"|''|0|0x00000000) netmask=''; nmask=0x00000000; break;;
+	    *)
+	      chkaddr $netmask |
+	        if read d x ; then
+		  nmask=$netmask
+	        else
+		  netmask=''
+		  continue
+	        fi
+	        ;;
+	    esac
+	  done
+	  chkaddr $inetaddr $nmask |
+	    if read broadcast x ; then
+	      :
+	    else
+	      broadcast=''; inetaddr=''; netmask='';
+	      continue
+	    fi
+        fi
+
+        echo "$NAME$unit: IP address $inetaddr"
+        if [ "$netmask" = '' ]; then
+	  echo "     netmask [none]"
+        else
+	  echo "     netmask $netmask"
+        fi
+        echo "     broadcast address $broadcast"
+        ask 'OK?' y
+        if [ "$reply" = 'y' ]; then
+	  break
+        else
+	  broadcast=''; inetaddr=''; netmask=''
+	  continue
+        fi
+
+      done
+
+      echo "$NAME$unit	$inetaddr $broadcast $netmask" >> $NETADDRS
+
+#
+#	make sure there is only one entry for this host in /etc/hosts
+#
+      if [ -f /etc/HOSTNAME ]; then
+        read host domain < /etc/HOSTNAME
+      else
+        host=`/bin/hostname`
+      fi
+      TMP=/tmp/$$hosts
+      /usr/bin/awk '
+	    { if ($2 != myhost) print $0 }
+        END { print addr, myhost, "#", now }
+      ' addr=$inetaddr myhost=$host now="`/bin/date`" $HOSTS > $TMP && \
+	cp $TMP $HOSTS
+      rm -f $TMP
+  
+    fi
+  fi
+
+  if [ $InstFlag = 0 ]; then
+    if [ -n "$inetaddr" ]; then
+      if [ -n "$netmask" ]; then
+        /etc/ifconfig $NAME$unit "$inetaddr" netmask "$netmask" -trailers
+      else
+        /etc/ifconfig $NAME$unit "$inetaddr" -trailers
+      fi
+    else	# no IP on this interface
+      /etc/ifconfig $NAME$unit up
+    fi
+    /etc/ifconfig $NAME$unit
+  fi
+
+  unit=`expr $unit + 1`
+
+done
+
+exit 0
