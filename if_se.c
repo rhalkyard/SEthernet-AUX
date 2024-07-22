@@ -276,6 +276,7 @@ int unit;
 				     ERXFCON_BCEN | ERXFCON_HTEN);
 
 	/* Enable packet reception */
+	s = splimp();
 	ENC624J600_SET_BITS(ctx->base_address, ECON1, ECON1_RXEN);
 
 	/* Mark interface as running */
@@ -290,7 +291,8 @@ int unit;
 	ENC624J600_SET_BITS(ctx->base_address, EIE,
 			    EIE_INTIE | EIE_LINKIE | EIE_PKTIE | EIE_RXABTIE |
 				    EIE_PCFULIE | EIE_TXIE | EIE_TXABTIE);
-
+	
+	splx(s);
 	printf("se%d: init complete. Driver version %s", unit, VERSION);
 	DBGP((" DEBUG BUILD ifp=%x", unit, ifp));
 	printf("\n");
@@ -496,6 +498,7 @@ void seint(args)
 struct args *args;
 {
 	int unit = se_units[args->a_dev];
+	int s;
 	register struct se_context *ctx = &se[unit];
 	register unsigned short *ir;
 	unsigned short tail;
@@ -532,9 +535,11 @@ struct args *args;
 		ENC624J600_CLEAR_BITS(ctx->base_address, EIR,
 				      EIR_TXIF | EIR_TXABTIF);
 		/* Start transmitting the next queued packet */
+		s = splimp();
 		if (ctx->ac.ac_if.if_snd.ifq_head) {
 			se_start(unit);
 		}
+		splx(s);
 	}
 
 	/* Recieve abort interrupt. Not much we can do here except note it */
