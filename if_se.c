@@ -1031,20 +1031,16 @@ struct se_context *ctx;
 			top = 0;
 			goto done;
 		}
+		m->m_len = MLEN;
 		mp->m_next = m;
 		mp = m;
 
 		if (len > MCLTHRESHOLD) {
 			MCLGET(m);
 		}
-		if (m->m_len == MCLBYTES) {
-			m->m_len = MIN(len, MCLBYTES);
-		} else {
-			if (len > MCLTHRESHOLD) {
-				DBGP(("se_get asked for mbuf cluster, didn't get one\n"));
-			}
-			m->m_len = MIN(len, MLEN);
-		}
+		/* If we got a cluster with MCLGET(m), then m_len will have
+		 * been set to the cluster size */
+		m->m_len = MIN(m->m_len, len);
 
 		se_getbytes(ctx, mtod(m, unsigned char *), m->m_len);
 		len -= m->m_len;
