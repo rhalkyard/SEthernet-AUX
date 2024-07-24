@@ -28,6 +28,21 @@ AppleSingle header off. I strongly recommend configuring the Finder to use
 AppleDouble instead, as described in the [A/UX
 FAQ](https://christtrekker.users.sourceforge.net/doc/aux/faq.html#AdminAppleDouble).
 
+### Building with GCC
+
+If you have GCC 2.7 installed on your A/UX system, it is highly recommended to
+build the driver with that instead of the compiler shipped with A/UX, as it is
+able to generate better-optimised code without sacrificing correctness (the A/UX
+compiler has no concept of `volatile` so it cannot be trusted to optimise code
+that touches hardware).
+
+To do so, edit the Makefile variables so that:
+
+```makefile
+CFLAGS=$(GCC_CFLAGS)
+CC=/usr/local/Gnu/gcc # (or wherever you installed gcc to))
+```
+
 ## Uninstallation
 
 ```sh

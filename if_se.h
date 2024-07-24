@@ -16,8 +16,8 @@ struct se_context {
 	struct arpcom ac;
 	unsigned char *base_address;		/* base address of chip */
 	unsigned short rxptr;			/* read pointer for rx ring */
-	unsigned int reset_counter;
-	struct timeval last_reset;
+	volatile unsigned int reset_counter;
+	volatile struct timeval last_reset;
 	unsigned char mcast_refcount[64];	/* multicast reference counts */
 };
 

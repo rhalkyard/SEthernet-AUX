@@ -30,6 +30,15 @@
 
 #include <stddef.h>
 
+/* Allow ANSI C conveniences when building with GCC while still being buildable
+ * with A/UX's non-ANSI cc */
+#if !defined(__STDC__)
+#define volatile
+#define __P(args) ()
+#else
+#define __P(args) args
+#endif
+
 #include "enc624j600_registers.h"
 #include "if_se.h"
 
@@ -72,17 +81,17 @@ extern int secnt; /* Number of devices */
 extern int seaddr[]; /* Slot numbers of devices indexed by unit number */
 
 /* functions exported thru uba_driver struct */
-INTERNAL int se_probe(/* struct uba_device *ui */);
-INTERNAL int se_attach(/* struct uba_device *ui */);
+INTERNAL int se_probe __P((struct uba_device *ui));
+INTERNAL int se_attach __P((struct uba_device *ui));
 
 /* functions exported thru ifnet struct */
-INTERNAL int se_init(/* int unit */);
-INTERNAL int se_ioctl(/* struct ifnet *ifp, int cmd, unsigned char * data */);
-INTERNAL int se_output(/* struct ifnet *ifp, struct mbuf *m0,
-			  struct sockaddr *dst */);
+INTERNAL int se_init __P((int unit));
+INTERNAL int se_ioctl __P((struct ifnet *ifp, int cmd, unsigned char * data));
+INTERNAL int se_output __P((struct ifnet *ifp, struct mbuf *m0,
+			    struct sockaddr *dst));
 
 /* raw ethernet output */
-INTERNAL int ren_output(/* struct mbuf *m0, struct socket *so */);
+INTERNAL int ren_output __P((struct mbuf *m0, struct socket *so));
 
 /* driver symbols exported to the kernel */
 void seint(/* struct args *args */);
@@ -91,17 +100,17 @@ struct uba_driver sedriver = { se_probe, se_attach, (unsigned short *)0,
 			       seinfo };
 
 /* Internal functions */
-INTERNAL void se_start(/* int unit */);
-INTERNAL void se_update_linkstate(/* struct se_context *ctx */);
-INTERNAL void se_reset_counter_clear( /* void * p */);
-INTERNAL void se_rxbuf_reset(/* struct se_context *ctx */);
-INTERNAL void se_rpkt(/* struct se_context *ctx */);
-INTERNAL void se_update_multicast(/* struct se_context *ctx */);
-INTERNAL int se_multicast_hash(/* unsigned char data[6] */);
-INTERNAL int se_put(/* struct se_context * ctx, struct mbuf *m */);
-INTERNAL void se_getbytes(/* struct se_context * ctx, unsigned char * dest, 
-			     unsigned short len */);
-INTERNAL struct mbuf *se_get(/* struct se_context * ctx */);
+INTERNAL void se_start __P((int unit));
+INTERNAL void se_update_linkstate __P((struct se_context *ctx));
+INTERNAL void se_reset_counter_clear __P((void * p));
+INTERNAL void se_rxbuf_reset __P((struct se_context *ctx));
+INTERNAL void se_rpkt __P((struct se_context *ctx));
+INTERNAL void se_update_multicast __P((struct se_context *ctx));
+INTERNAL int se_multicast_hash __P((unsigned char data[6]));
+INTERNAL int se_put __P((struct se_context * ctx, struct mbuf *m));
+INTERNAL void se_getbytes __P((struct se_context * ctx, unsigned char * dest, 
+			       unsigned short len));
+INTERNAL struct mbuf *se_get __P((struct se_context * ctx));
 
 INTERNAL int se_units[16]; /* unit numbers of devices, indexed by slot number */
 INTERNAL struct se_context se[N_SE];
@@ -121,7 +130,8 @@ int len;
 	}
 }
 
-INTERNAL void se_mdump(m) struct mbuf * m;
+INTERNAL void se_mdump(m)
+struct mbuf * m;
 {
 	int i;
 	unsigned char b;
@@ -500,7 +510,7 @@ struct args *args;
 	int unit = se_units[args->a_dev];
 	int s;
 	register struct se_context *ctx = &se[unit];
-	register unsigned short *ir;
+	volatile unsigned short *ir;
 	unsigned short tail;
 
 	if (unit < 0 || unit > N_SE) {
@@ -619,7 +629,7 @@ struct se_context *ctx;
 		goto done;
 	default:
 #ifdef APPLETALK
-		if (type >= 0 && type <= ETHERMTU && NETISR_ET != NULL) {
+		if (type <= ETHERMTU && NETISR_ET != NULL) {
 			if (type < 60) {
 				/* Discard padding for short packets */
 				m->m_next->m_len = type;
