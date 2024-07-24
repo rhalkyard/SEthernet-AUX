@@ -6,6 +6,11 @@ been tested on A/UX 3, and should also function on A/UX 2.
 
 ## Building and installation
 
+Before installing the A/UX driver, ensure that the A/UX boot environment has the
+[Mac OS SEthernet drivers](https://github.com/rhalkyard/SEthernet/releases)
+installed, otherwise it will keep switching your AppleTalk device back to
+LocalTalk and generally be an annoyance.
+
 Your kernel must have networking support enabled. This is the default, but if
 you have disabled it, you will first need to run `newconfig bnet appletalk nfs`
 and restart.
